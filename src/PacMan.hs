@@ -11,6 +11,7 @@ import qualified SDL.Image
 import qualified SDL.Mixer
 
 import qualified Base
+import Maze
 
 type PacManTextureMap = Map PacManTextureKey PacManTexture
 type PacManTextureKey = PacManState
@@ -53,7 +54,6 @@ newPacMan sprites = do
 
 movePacMan :: PacMan -> Base.Direction -> STM ()
 movePacMan pacMan direction = do
-    let constant = 24
     point <- getPoint pacMan
     let (p, s) = case direction of {
         Base.Up    -> (Base.Point2D (Base.x point) (Base.y point - constant), Up);
@@ -61,8 +61,11 @@ movePacMan pacMan direction = do
         Base.Left  -> (Base.Point2D (Base.x point - constant) (Base.y point), Left);
         Base.Right -> (Base.Point2D (Base.x point + constant) (Base.y point), Right);
         _          -> (point, Dead) }
-    setPoint pacMan p
     setState pacMan s
+    when (isValidPosition (transform $ Base.y p) (transform $ Base.x p)) (setPoint pacMan p)
+    where transform a = div (a - offset) constant
+          offset = 6
+          constant = 24
 
 nextFrame :: PacMan -> IO ()
 nextFrame pacMan = do
