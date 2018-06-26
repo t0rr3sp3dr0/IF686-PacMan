@@ -62,9 +62,13 @@ movePacMan pacMan direction = do
         Base.Right -> (Base.Point2D (Base.x point + constant) (Base.y point), Right);
         _          -> (point, Dead) }
     setState pacMan s
-    when (isValidPosition (transform $ Base.y p) (transform $ Base.x p)) (setPoint pacMan p)
+    let (i, j) = (transform $ Base.y p, transform $ Base.x p)
+    when (isValidPosition i j) (do
+        setPoint pacMan p
+        when (mazeMatrix !! i !! j == Transport) (setPoint pacMan (Base.Point2D (invert $ transport j) (Base.y p))))
     where transform a = div (a - offset) constant
-          offset = 6
+          invert a = a * constant + offset
+          offset = 18
           constant = 24
 
 nextFrame :: PacMan -> IO ()
@@ -98,7 +102,7 @@ instance Base.Entity PacMan where
             setFrame pacMan 0
             setPoint pacMan (Base.Point2D 18 18)
             setTextures pacMan (fromList [(Right, Base.Point2D 456 0), (Left, Base.Point2D 456 16), (Up, Base.Point2D 456 32), (Down, Base.Point2D 456 48), (Dead, Base.Point2D 488 0)]))
-            
+  
     render pacMan renderer = do
         (state, frame, point, textures) <- atomically (do
             state <- getState pacMan
