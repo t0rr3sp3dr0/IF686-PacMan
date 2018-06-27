@@ -84,6 +84,16 @@ nextFrame pacMan = do
     threadDelay 125000
     when (s /= Dead || f /= 11) $ nextFrame pacMan
 
+walk :: PacMan -> IO ()
+walk pacMan = do
+    atomically (do
+        state <- getState pacMan
+        movePacMan pacMan (stateToDirection state))
+    threadDelay 250000
+    walk pacMan
+    where
+        constant = 24
+        
 onDeath :: PacMan -> IO ()
 onDeath pacMan = do
     state <- atomically (getState pacMan)
@@ -93,8 +103,25 @@ onDeath pacMan = do
             SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
             SDL.Mixer.load "./resources/audios/death.wav" >>= SDL.Mixer.play
 
+directionToState :: Base.Direction -> PacManState
+directionToState direction = case direction of
+    Base.Up    -> Up
+    Base.Down  -> Down
+    Base.Left  -> Left
+    Base.Right -> Right
+    _          -> Dead
+
+stateToDirection :: PacManState -> Base.Direction
+stateToDirection state = case state of
+    Up    -> Base.Up
+    Down  -> Base.Down
+    Left  -> Base.Left
+    Right -> Base.Right
+    _     -> Base.None
+
 instance Base.Entity PacMan where
     initialize pacMan renderer = do
+        forkIO $ walk pacMan
         forkIO $ onDeath pacMan
         forkIO $ nextFrame pacMan
         atomically (do
