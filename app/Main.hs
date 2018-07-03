@@ -17,6 +17,7 @@ import GUI
 import Maze
 import qualified PacMan
 import qualified Ghost
+import CollisionDetection
 
 main :: IO ()
 main = withSDL $ withSDLImage $ do
@@ -33,7 +34,11 @@ main = withSDL $ withSDLImage $ do
 
       pacMan <- atomically (PacMan.newPacMan texture)
       initialize pacMan r
-      atomically (PacMan.addGhost pacMan ghost)
+
+      atomically (do
+        let collisionDetection = detectCollision pacMan [ghost]
+        PacMan.setCollisionDetection pacMan collisionDetection
+        Ghost.setCollisionDetection ghost collisionDetection)
 
       let render = draw r pacMan ghost texture
       let movePacMan direction = atomically (PacMan.setState pacMan (PacMan.directionToState direction))

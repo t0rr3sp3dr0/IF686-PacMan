@@ -3,7 +3,7 @@ module PacMan where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
-import Data.Map hiding (foldr)
+import Data.Map
 import Prelude hiding (Left, lookup, Right)
 
 import qualified SDL
@@ -12,7 +12,6 @@ import qualified SDL.Mixer
 
 import qualified Base
 import Maze
-import qualified Ghost
 
 type PacManTextureMap = Map PacManTextureKey PacManTexture
 type PacManTextureKey = PacManState
@@ -23,7 +22,7 @@ data PacManState = Right | Left | Up | Down | Dead
 
 type PacManFrame = Int
 
-data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, ghosts :: TVar [Ghost.Ghost] }
+data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()) }
 
 getState :: PacMan -> STM PacManState
 getState pacMan = readTVar (state pacMan)
@@ -45,12 +44,10 @@ getTextures pacMan = readTVar (textures pacMan)
 setTextures :: PacMan -> PacManTextureMap -> STM ()
 setTextures pacMan = writeTVar (textures pacMan)
 
-getGhosts :: PacMan -> STM [Ghost.Ghost]
-getGhosts pacMan = readTVar (ghosts pacMan)
-addGhost :: PacMan -> Ghost.Ghost -> STM ()
-addGhost pacMan ghost = do
-    gs <- getGhosts pacMan
-    writeTVar (ghosts pacMan) (ghost : gs)
+getCollisionDetection :: PacMan -> STM (() -> STM ())
+getCollisionDetection pacMan = readTVar (collisionDetection pacMan)
+setCollisionDetection :: PacMan -> (() -> STM ()) -> STM ()
+setCollisionDetection pacMan = writeTVar (collisionDetection pacMan)
 
 newPacMan :: SDL.Texture -> STM PacMan
 newPacMan sprites = do
@@ -58,8 +55,8 @@ newPacMan sprites = do
     frame <- newTVar 0
     point <- newTVar (Base.Point2D 0 0)
     textures <- newTVar (fromList [])
-    ghosts <- newTVar []
-    return (PacMan state frame point textures sprites ghosts)
+    collisionDetection <- newTVar (return)
+    return (PacMan state frame point textures sprites collisionDetection)
 
 movePacMan :: PacMan -> Base.Direction -> STM ()
 movePacMan pacMan direction = do
@@ -75,16 +72,8 @@ movePacMan pacMan direction = do
     when (isValidPosition i j && mazeMatrix !! i !! j /= Door) (do
         setPoint pacMan p
         when (mazeMatrix !! i !! j == Transport) (setPoint pacMan (Base.Point2D (invert $ transport j) (Base.y p)))
-        gs <- getGhosts pacMan
-        b <- foldr (\ghost b -> do
-            _b <- b
-            if _b
-                then b
-                else do
-                    pP <- getPoint pacMan
-                    gP <- Ghost.getPoint ghost
-                    return (pP == gP)) (return False) gs
-        when b (setState pacMan Dead))
+        collisionDetection <- getCollisionDetection pacMan
+        collisionDetection ())
     where transform a = div (a - offset) constant
           invert a = a * constant + offset
           offset = 18
@@ -112,7 +101,7 @@ walk pacMan = do
     walk pacMan
     where
         constant = 24
-        
+
 onDeath :: PacMan -> IO ()
 onDeath pacMan = do
     state <- atomically (getState pacMan)
