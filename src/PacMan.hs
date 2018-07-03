@@ -63,7 +63,7 @@ movePacMan pacMan direction = do
         _          -> (point, Dead) }
     setState pacMan s
     let (i, j) = (transform $ Base.y p, transform $ Base.x p)
-    when (isValidPosition i j) (do
+    when (isValidPosition i j && mazeMatrix !! i !! j /= Door) (do
         setPoint pacMan p
         when (mazeMatrix !! i !! j == Transport) (setPoint pacMan (Base.Point2D (invert $ transport j) (Base.y p))))
     where transform a = div (a - offset) constant

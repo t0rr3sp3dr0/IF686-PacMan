@@ -15,7 +15,8 @@ import Base
 import Intent
 import GUI
 import Maze
-import PacMan
+import qualified PacMan
+import qualified Ghost
 
 main :: IO ()
 main = withSDL $ withSDLImage $ do
@@ -27,21 +28,26 @@ main = withSDL $ withSDLImage $ do
       
       texture <- SDL.Image.loadTexture r "./resources/images/sprites.png"
 
-      pacMan <- atomically (newPacMan texture)
+      pacMan <- atomically (PacMan.newPacMan texture)
       initialize pacMan r
 
-      let render = draw r pacMan texture
-      let move direction = atomically (setState pacMan (directionToState direction))
-      whileM $ newIntent <$> SDL.pollEvent >>= runIntent render move
+      ghost <- atomically (Ghost.newGhost texture)
+      initialize ghost r
+
+      let render = draw r pacMan ghost texture
+      let movePacMan direction = atomically (PacMan.setState pacMan (PacMan.directionToState direction))
+      let moveGhost direction = atomically (Ghost.setState ghost (Ghost.directionToState direction))
+      whileM $ newIntent <$> SDL.pollEvent >>= runIntent render movePacMan moveGhost
 
       SDL.destroyTexture texture
 
-draw :: SDL.Renderer -> PacMan -> SDL.Texture -> IO ()
-draw r pacMan texture = do
+draw :: SDL.Renderer -> PacMan.PacMan -> Ghost.Ghost -> SDL.Texture -> IO ()
+draw r pacMan ghost texture = do
   SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
   SDL.clear r
 
   renderMaze r texture
+  render ghost r
   render pacMan r
 
   SDL.present r
