@@ -28,11 +28,12 @@ main = withSDL $ withSDLImage $ do
       
       texture <- SDL.Image.loadTexture r "./resources/images/sprites.png"
 
-      pacMan <- atomically (PacMan.newPacMan texture)
-      initialize pacMan r
-
       ghost <- atomically (Ghost.newGhost texture)
       initialize ghost r
+
+      pacMan <- atomically (PacMan.newPacMan texture)
+      initialize pacMan r
+      atomically (PacMan.addGhost pacMan ghost)
 
       let render = draw r pacMan ghost texture
       let movePacMan direction = atomically (PacMan.setState pacMan (PacMan.directionToState direction))
