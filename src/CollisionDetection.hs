@@ -1,8 +1,8 @@
 module CollisionDetection where
-    
+
     import Control.Concurrent.STM
     import Control.Monad
-    
+
     import qualified PacMan
     import qualified Ghost
 
