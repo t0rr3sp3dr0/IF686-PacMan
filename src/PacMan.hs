@@ -88,12 +88,13 @@ module PacMan where
     movePacMan :: PacMan -> Base.Direction -> STM ()
     movePacMan pacMan direction = do
         point <- getPoint pacMan
+        state <- getState pacMan
         let (p, s) = case direction of {
             Base.Up    -> (Base.Point2D (Base.x point) (Base.y point - constant), Up);
             Base.Down  -> (Base.Point2D (Base.x point) (Base.y point + constant), Down);
             Base.Left  -> (Base.Point2D (Base.x point - constant) (Base.y point), Left);
             Base.Right -> (Base.Point2D (Base.x point + constant) (Base.y point), Right);
-            _          -> (point, Dead) }
+            _          -> (point, state) }
         setState pacMan s
         let (i, j) = (transform $ Base.y p, transform $ Base.x p)
         when (isValidPosition i j && mazeMatrix !! i !! j /= Door) (do
