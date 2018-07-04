@@ -22,14 +22,18 @@ module Ghost where
 
     type GhostFrame = Int
 
-    data Ghost = Ghost { state :: TVar GhostState, frame :: TVar GhostFrame, point :: TVar Base.Point, textures :: TVar GhostTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ())}
+    data Ghost = Ghost { state :: TVar GhostState, frame :: TVar GhostFrame, point :: TVar Base.Point, textures :: TVar GhostTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()), canDie :: TVar Bool }
 
     getState :: Ghost -> STM GhostState
     getState ghost = readTVar (state ghost)
     setState :: Ghost -> GhostState -> STM ()
     setState ghost newState = do
         actualState <- getState ghost
-        when (actualState /= Dead) (writeTVar (state ghost) newState)
+        when (actualState /= Dead) (if newState == Mortal
+            then setCanDie ghost True
+            else do
+                when (newState == Dead) (setCanDie ghost False)
+                writeTVar (state ghost) newState)
 
     getFrame :: Ghost -> STM GhostFrame
     getFrame ghost = readTVar (frame ghost)
@@ -51,6 +55,11 @@ module Ghost where
     setCollisionDetection :: Ghost -> (() -> STM ()) -> STM ()
     setCollisionDetection ghost = writeTVar (collisionDetection ghost)
 
+    getCanDie :: Ghost -> STM Bool
+    getCanDie ghost = readTVar (canDie ghost)
+    setCanDie :: Ghost -> Bool -> STM ()
+    setCanDie ghost = writeTVar (canDie ghost)
+
     newGhost :: SDL.Texture -> STM Ghost
     newGhost sprites = do
         state <- newTVar Up
@@ -58,7 +67,8 @@ module Ghost where
         point <- newTVar (Base.Point2D 12 12)
         textures <- newTVar (fromList [])
         collisionDetection <- newTVar return
-        return (Ghost state frame point textures sprites collisionDetection)
+        canDie <- newTVar False
+        return (Ghost state frame point textures sprites collisionDetection canDie)
 
     moveGhost :: Ghost -> Base.Direction -> STM ()
     moveGhost ghost direction = do
@@ -140,7 +150,10 @@ module Ghost where
 
         render ghost renderer = do
             (state, frame, point, textures) <- atomically (do
-                state <- getState ghost
+                canDie <- getCanDie ghost
+                state <- if canDie
+                    then return Mortal
+                    else getState ghost
                 frame <- getFrame ghost
                 point <- getPoint ghost
                 textures <- getTextures ghost

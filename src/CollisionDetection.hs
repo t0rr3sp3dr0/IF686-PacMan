@@ -18,7 +18,8 @@ module CollisionDetection where
                     return (pP == gP)) (return False) ghosts
         let g = head ghosts
         s <- Ghost.getState g
-        when (b && s /= Ghost.Dead) (if s /= Ghost.Mortal
+        d <- Ghost.getCanDie g
+        when (b && s /= Ghost.Dead) (if s /= Ghost.Mortal && not d
             then PacMan.setState pacMan PacMan.Dead
             else Ghost.setState g Ghost.Dead)
     
