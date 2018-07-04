@@ -29,7 +29,7 @@ module Intent where
         SDL.KeycodeDown   -> MovePacMan Base.Down
         SDL.KeycodeLeft   -> MovePacMan Base.Left
         SDL.KeycodeRight  -> MovePacMan Base.Right
-        _                 -> MovePacMan Base.None
+        _                 -> Idle
 
     runIntent :: (Monad m) => m () -> (Direction -> m ()) -> (Direction -> m ()) -> Intent -> m Bool
     runIntent _ _ _ Quit = pure False
