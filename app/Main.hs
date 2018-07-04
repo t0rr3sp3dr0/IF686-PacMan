@@ -39,8 +39,10 @@ main = withSDL $ withSDLImage $ do
 
       atomically (do
         let collisionDetection = detectCollision pacMan [ghost]
+        PacMan.setCollisionDetection pacMan collisionDetection
         Ghost.setCollisionDetection ghost collisionDetection
-        PacMan.setCollisionDetection pacMan collisionDetection)
+        let powerEnabler = enablePower [ghost]
+        PacMan.setPowerEnabler pacMan powerEnabler)
 
       let render = draw r pacMan ghost texture
       let movePacMan direction = atomically (PacMan.setState pacMan (PacMan.directionToState direction))

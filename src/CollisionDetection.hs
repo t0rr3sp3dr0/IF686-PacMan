@@ -16,4 +16,14 @@ module CollisionDetection where
                 else do
                     gP <- Ghost.getPoint ghost
                     return (pP == gP)) (return False) ghosts
-        when b (PacMan.setState pacMan PacMan.Dead)
+        let g = head ghosts
+        s <- Ghost.getState g
+        when (b && s /= Ghost.Dead) (if s /= Ghost.Mortal
+            then PacMan.setState pacMan PacMan.Dead
+            else Ghost.setState g Ghost.Dead)
+    
+    enablePower :: [Ghost.Ghost] -> () -> STM ()
+    enablePower [] _ = return ()
+    enablePower (g : gs) _ = do
+        Ghost.setState g Ghost.Mortal
+        enablePower gs ()

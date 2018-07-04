@@ -17,12 +17,12 @@ module Ghost where
     type GhostTextureKey = GhostState
     type GhostTexture = Base.Point
 
-    data GhostState = Right | Left | Up | Down | Dead
+    data GhostState = Right | Left | Up | Down | Mortal | Dead
       deriving (Bounded, Enum, Eq, Ord, Show)
 
     type GhostFrame = Int
 
-    data Ghost = Ghost { state :: TVar GhostState, frame :: TVar GhostFrame, point :: TVar Base.Point, textures :: TVar GhostTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()) }
+    data Ghost = Ghost { state :: TVar GhostState, frame :: TVar GhostFrame, point :: TVar Base.Point, textures :: TVar GhostTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ())}
 
     getState :: Ghost -> STM GhostState
     getState ghost = readTVar (state ghost)
@@ -61,12 +61,13 @@ module Ghost where
     moveGhost :: Ghost -> Base.Direction -> STM ()
     moveGhost ghost direction = do
         point <- getPoint ghost
+        state <- getState ghost
         let (p, s) = case direction of {
             Base.Up    -> (Base.Point2D (Base.x point) (Base.y point - constant), Up);
             Base.Down  -> (Base.Point2D (Base.x point) (Base.y point + constant), Down);
             Base.Left  -> (Base.Point2D (Base.x point - constant) (Base.y point), Left);
             Base.Right -> (Base.Point2D (Base.x point + constant) (Base.y point), Right);
-            _          -> (point, Dead) }
+            _          -> (point, state) }
         setState ghost s
         let (i, j) = (transform $ Base.y p, transform $ Base.x p)
         when (isValidPosition i j) (do
@@ -133,7 +134,7 @@ module Ghost where
                 setState ghost Up
                 setFrame ghost 0
                 setPoint ghost (Base.Point2D 306 306)
-                setTextures ghost (fromList [(Right, Base.Point2D 456 64), (Left, Base.Point2D 488 64), (Up, Base.Point2D 520 64), (Down, Base.Point2D 552 64), (Dead, Base.Point2D 616 64)]))
+                setTextures ghost (fromList [(Right, Base.Point2D 456 64), (Left, Base.Point2D 488 64), (Up, Base.Point2D 520 64), (Down, Base.Point2D 552 64), (Mortal, Base.Point2D 584 64), (Dead, Base.Point2D 616 64)]))
 
         render ghost renderer = do
             (state, frame, point, textures) <- atomically (do

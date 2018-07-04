@@ -23,7 +23,7 @@ module PacMan where
 
     type PacManFrame = Int
 
-    data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()), triggerSound :: TVar Bool, coinsEaten :: TVar (Map Base.Point ()), eatCoin :: TVar (() -> STM ()) }
+    data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()), triggerSound :: TVar Bool, coinsEaten :: TVar (Map Base.Point ()), eatCoin :: TVar (() -> STM ()), powerEnabler :: TVar (() -> STM ()) }
 
     getState :: PacMan -> STM PacManState
     getState pacMan = readTVar (state pacMan)
@@ -65,6 +65,11 @@ module PacMan where
     setEatCoin :: PacMan -> (() -> STM ()) -> STM ()
     setEatCoin pacMan = writeTVar (eatCoin pacMan)
 
+    getPowerEnabler :: PacMan -> STM (() -> STM ())
+    getPowerEnabler pacMan = readTVar (powerEnabler pacMan)
+    setPowerEnabler :: PacMan -> (() -> STM ()) -> STM ()
+    setPowerEnabler pacMan = writeTVar (powerEnabler pacMan)
+
     newPacMan :: SDL.Texture -> STM PacMan
     newPacMan sprites = do
         state <- newTVar Right
@@ -75,7 +80,8 @@ module PacMan where
         triggerSound <- newTVar False
         coinsEaten <- newTVar (fromList [])
         eatCoin <- newTVar return
-        return (PacMan state frame point textures sprites collisionDetection triggerSound coinsEaten eatCoin)
+        powerEnabler <- newTVar return
+        return (PacMan state frame point textures sprites collisionDetection triggerSound coinsEaten eatCoin powerEnabler)
 
     movePacMan :: PacMan -> Base.Direction -> STM ()
     movePacMan pacMan direction = do
@@ -92,9 +98,11 @@ module PacMan where
             setPoint pacMan p
             when (mazeMatrix !! i !! j == Transport) (setPoint pacMan (Base.Point2D (invert $ transport j) (Base.y p)))
             m <- getCoinsEaten pacMan
-            when (mazeMatrix !! i !! j == Coin && isNothing (lookup p m)) (do
+            when ((mazeMatrix !! i !! j == Coin || mazeMatrix !! i !! j == Power) && isNothing (lookup p m)) (do
                 setCoinsEaten pacMan (insert p () m)
-                setTriggerSound pacMan True)
+                setTriggerSound pacMan True
+                e <- getPowerEnabler pacMan
+                when (mazeMatrix !! i !! j == Power) (e ()))
             collisionDetection <- getCollisionDetection pacMan
             collisionDetection ())
         where transform a = div (a - offset) constant
