@@ -27,7 +27,9 @@ module Ghost where
     getState :: Ghost -> STM GhostState
     getState ghost = readTVar (state ghost)
     setState :: Ghost -> GhostState -> STM ()
-    setState ghost = writeTVar (state ghost)
+    setState ghost newState = do
+        actualState <- getState ghost
+        when (actualState /= Dead) (writeTVar (state ghost) newState)
 
     getFrame :: Ghost -> STM GhostFrame
     getFrame ghost = readTVar (frame ghost)
@@ -149,4 +151,3 @@ module Ghost where
             SDL.copy renderer (sprites ghost) (Just $ SDL.Rectangle (SDL.P (SDL.V2 i j)) (SDL.V2 16 16)) (Just $ SDL.Rectangle (SDL.P (SDL.V2 x y)) (SDL.V2 36 36))
 
         position ghost = atomically (getPoint ghost)
-    
