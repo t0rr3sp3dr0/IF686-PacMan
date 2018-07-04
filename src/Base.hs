@@ -3,7 +3,7 @@ module Base where
     import qualified SDL
 
     data Point = Point2D { x :: Int, y :: Int }
-        deriving (Eq)
+        deriving (Eq, Ord)
 
     class Entity a where
         initialize :: a -> SDL.Renderer -> IO ()

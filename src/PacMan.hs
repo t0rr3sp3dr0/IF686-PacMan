@@ -4,6 +4,7 @@ module PacMan where
     import Control.Concurrent.STM
     import Control.Monad
     import Data.Map
+    import Data.Maybe
     import Prelude hiding (Left, lookup, Right)
 
     import qualified SDL
@@ -22,7 +23,7 @@ module PacMan where
 
     type PacManFrame = Int
 
-    data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()) }
+    data PacMan = PacMan { state :: TVar PacManState, frame :: TVar PacManFrame, point :: TVar Base.Point, textures :: TVar PacManTextureMap, sprites :: SDL.Texture, collisionDetection :: TVar (() -> STM ()), triggerSound :: TVar Bool, coinsEaten :: TVar (Map Base.Point ()), eatCoin :: TVar (() -> STM ()) }
 
     getState :: PacMan -> STM PacManState
     getState pacMan = readTVar (state pacMan)
@@ -49,6 +50,21 @@ module PacMan where
     setCollisionDetection :: PacMan -> (() -> STM ()) -> STM ()
     setCollisionDetection pacMan = writeTVar (collisionDetection pacMan)
 
+    getTriggerSound :: PacMan -> STM Bool
+    getTriggerSound pacMan = readTVar (triggerSound pacMan)
+    setTriggerSound :: PacMan -> Bool -> STM ()
+    setTriggerSound pacMan = writeTVar (triggerSound pacMan)
+    
+    getCoinsEaten :: PacMan -> STM (Map Base.Point ())
+    getCoinsEaten pacMan = readTVar (coinsEaten pacMan)
+    setCoinsEaten :: PacMan -> Map Base.Point () -> STM ()
+    setCoinsEaten pacMan = writeTVar (coinsEaten pacMan)
+
+    getEatCoin :: PacMan -> STM (() -> STM ())
+    getEatCoin pacMan = readTVar (eatCoin pacMan)
+    setEatCoin :: PacMan -> (() -> STM ()) -> STM ()
+    setEatCoin pacMan = writeTVar (eatCoin pacMan)
+
     newPacMan :: SDL.Texture -> STM PacMan
     newPacMan sprites = do
         state <- newTVar Right
@@ -56,7 +72,10 @@ module PacMan where
         point <- newTVar (Base.Point2D 0 0)
         textures <- newTVar (fromList [])
         collisionDetection <- newTVar return
-        return (PacMan state frame point textures sprites collisionDetection)
+        triggerSound <- newTVar False
+        coinsEaten <- newTVar (fromList [])
+        eatCoin <- newTVar return
+        return (PacMan state frame point textures sprites collisionDetection triggerSound coinsEaten eatCoin)
 
     movePacMan :: PacMan -> Base.Direction -> STM ()
     movePacMan pacMan direction = do
@@ -72,6 +91,10 @@ module PacMan where
         when (isValidPosition i j && mazeMatrix !! i !! j /= Door) (do
             setPoint pacMan p
             when (mazeMatrix !! i !! j == Transport) (setPoint pacMan (Base.Point2D (invert $ transport j) (Base.y p)))
+            m <- getCoinsEaten pacMan
+            when (mazeMatrix !! i !! j == Coin && isNothing (lookup p m)) (do
+                setCoinsEaten pacMan (insert p () m)
+                setTriggerSound pacMan True)
             collisionDetection <- getCollisionDetection pacMan
             collisionDetection ())
         where transform a = div (a - offset) constant
@@ -111,6 +134,18 @@ module PacMan where
                 SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
                 SDL.Mixer.load "./resources/audios/death.wav" >>= SDL.Mixer.play
 
+    onEatCoin :: PacMan -> IO ()
+    onEatCoin pacMan = do
+        b <- atomically (do
+            b <- getTriggerSound pacMan
+            setTriggerSound pacMan False
+            return b)
+        when b (do
+            SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
+            SDL.Mixer.load "./resources/audios/chomp.wav" >>= SDL.Mixer.play
+            threadDelay 875000)
+        onEatCoin pacMan
+
     directionToState :: Base.Direction -> PacManState
     directionToState direction = case direction of
         Base.Up    -> Up
@@ -132,6 +167,7 @@ module PacMan where
             forkIO $ walk pacMan
             forkIO $ onDeath pacMan
             forkIO $ nextFrame pacMan
+            forkIO $ onEatCoin pacMan
             atomically (do
                 setState pacMan Right
                 setFrame pacMan 0
