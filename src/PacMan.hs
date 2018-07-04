@@ -28,7 +28,9 @@ module PacMan where
     getState :: PacMan -> STM PacManState
     getState pacMan = readTVar (state pacMan)
     setState :: PacMan -> PacManState -> STM ()
-    setState pacMan = writeTVar (state pacMan)
+    setState pacMan newState = do
+        actualState <- getState pacMan
+        when (actualState /= Dead) (writeTVar (state pacMan) newState)
 
     getFrame :: PacMan -> STM PacManFrame
     getFrame pacMan = readTVar (frame pacMan)
