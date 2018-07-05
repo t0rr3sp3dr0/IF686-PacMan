@@ -125,7 +125,7 @@ module Ghost where
         atomically (do
             canDie <- getCanDie ghost
             unless canDie retry)
-        threadDelay 4000000
+        threadDelay 8000000
         atomically (setCanDie ghost False)
         onPower ghost
 
