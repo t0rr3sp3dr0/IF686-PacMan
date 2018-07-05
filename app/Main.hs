@@ -30,6 +30,7 @@ main = withSDL $ withSDLImage $ do
       SDL.Mixer.load "./resources/audios/beginning.wav" >>= SDL.Mixer.play
       
       texture <- SDL.Image.loadTexture r "./resources/images/sprites.png"
+      mask <- SDL.Image.loadTexture r "./resources/images/mask.png"
 
       ghost <- atomically (Ghost.newGhost texture)
       initialize ghost r
@@ -44,29 +45,38 @@ main = withSDL $ withSDLImage $ do
         let powerEnabler = enablePower [ghost]
         PacMan.setPowerEnabler pacMan powerEnabler)
 
-      let render = draw r pacMan ghost texture
+      m <- newEmptyMVar
+      t <- atomically (newTVar 0)
+      forkIO $ levels m t pacMan ghost
+
+      let render = draw r pacMan ghost texture mask m t
       let movePacMan direction = atomically (PacMan.setState pacMan (PacMan.directionToState direction))
       let moveGhost direction = atomically (Ghost.setState ghost (Ghost.directionToState direction))
       whileM $ newIntent <$> SDL.pollEvent >>= runIntent render movePacMan moveGhost
 
       SDL.destroyTexture texture
 
-draw :: SDL.Renderer -> PacMan.PacMan -> Ghost.Ghost -> SDL.Texture -> IO ()
-draw r pacMan ghost texture = do
+draw :: SDL.Renderer -> PacMan.PacMan -> Ghost.Ghost -> SDL.Texture -> SDL.Texture -> MVar () -> TVar Int -> IO ()
+draw r pacMan ghost texture mask m t = do
   SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
   SDL.clear r
 
+  level <- readTVarIO t
+
   renderMaze r texture
-  hideCoins r pacMan
+  hideCoins r pacMan m
+  when (level == 1) (renderMask r mask pacMan ghost)
   render ghost r
   render pacMan r
 
   SDL.present r
 
-hideCoins :: SDL.Renderer -> PacMan.PacMan -> IO ()
-hideCoins r pacMan = do
+hideCoins :: SDL.Renderer -> PacMan.PacMan -> MVar () -> IO ()
+hideCoins r pacMan m = do
   coinsEaten <- atomically (PacMan.getCoinsEaten pacMan)
-  drawBlack r (PacMan.sprites pacMan) (toList coinsEaten)
+  let coins = toList coinsEaten
+  drawBlack r (PacMan.sprites pacMan) coins
+  when (length coins == 244) (putMVar m ())
 
 drawBlack :: SDL.Renderer -> SDL.Texture -> [(Point, ())] -> IO ()
 drawBlack r sprites [] = return ()
@@ -76,3 +86,27 @@ drawBlack r sprites ((point, _) : xs) = do
   let (x, y) = (fromIntegral $ Base.x point, fromIntegral $ Base.y point)
   SDL.copy r sprites (Just $ SDL.Rectangle (SDL.P (SDL.V2 i j)) (SDL.V2 16 16)) (Just $ SDL.Rectangle (SDL.P (SDL.V2 x y)) (SDL.V2 36 36))
   drawBlack r sprites xs
+
+levels :: MVar () -> TVar Int -> PacMan.PacMan -> Ghost.Ghost -> IO ()
+levels m t pacMan ghost = do
+  takeMVar m
+  i <- atomically (do
+    PacMan.setCoinsEaten pacMan (fromList [])
+    Ghost.setCanDie ghost False
+    writeTVar (Ghost.state ghost) Ghost.Up
+    i <- readTVar t
+    writeTVar t (i + 1)
+    return i)
+  when (i < 2) (levels m t pacMan ghost)
+
+renderMask :: SDL.Renderer -> SDL.Texture -> PacMan.PacMan -> Ghost.Ghost -> IO ()
+renderMask r mask pacMan ghost = do
+  point <- atomically (do
+    state <- Ghost.getState ghost
+    if state /= Ghost.Dead
+      then Ghost.getPoint ghost
+      else PacMan.getPoint pacMan)
+  let (x, y) = (fromIntegral (Base.x point) - fromIntegral (div w 2), fromIntegral (Base.y point) - fromIntegral (div h 2))
+  SDL.copy r mask (Just $ SDL.Rectangle (SDL.P (SDL.V2 0 0)) (SDL.V2 w h)) (Just $ SDL.Rectangle (SDL.P (SDL.V2 x y)) (SDL.V2 w h))
+  where w = 1344
+        h = 1488
