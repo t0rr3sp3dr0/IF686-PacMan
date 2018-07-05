@@ -115,11 +115,19 @@ module Ghost where
     onDeath :: Ghost -> IO ()
     onDeath ghost = do
         state <- atomically (getState ghost)
-        if state /= Dead
-            then onDeath ghost
-            else do
-                SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
-                SDL.Mixer.load "./resources/audios/eatghost.wav" >>= SDL.Mixer.play
+        when (state == Dead) (do
+            SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
+            SDL.Mixer.load "./resources/audios/eatghost.wav" >>= SDL.Mixer.play)
+        onDeath ghost
+    
+    onPower :: Ghost -> IO ()
+    onPower ghost = do
+        atomically (do
+            canDie <- getCanDie ghost
+            unless canDie retry)
+        threadDelay 4000000
+        atomically (setCanDie ghost False)
+        onPower ghost
 
     directionToState :: Base.Direction -> GhostState
     directionToState direction = case direction of
@@ -141,6 +149,7 @@ module Ghost where
         initialize ghost renderer = do
             forkIO $ walk ghost
             forkIO $ onDeath ghost
+            forkIO $ onPower ghost
             forkIO $ nextFrame ghost
             atomically (do
                 setState ghost Up
